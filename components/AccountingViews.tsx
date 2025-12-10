@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { AccountItem, PnLItem, UserProfile, TranslationDictionary, Transaction, InvoiceLineItem } from '../types';
 import { ChevronRight, ChevronDown, CheckCircle, PlusCircle, CreditCard, Banknote, Save, Trash2, Tag, Percent, Sparkles, Loader2, UploadCloud, Scan, FileText } from 'lucide-react';

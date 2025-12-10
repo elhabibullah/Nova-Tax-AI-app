@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { UserProfile, CryptoAsset, SalaryRequest, TranslationDictionary } from '../types';
 import { estimateSalary, runFeasibilityStudy, analyzeCryptoPortfolio, getFeasibilitySuggestion } from '../services/geminiService';
+import { getCryptoPrices } from '../services/marketDataService';
 import { Loader2, Send, Wallet, TrendingUp, TrendingDown, ShieldCheck, FileText, CheckCircle, Search, ChevronRight, ChevronLeft, ChevronDown, Sparkles, Download, Edit3, Globe } from 'lucide-react';
 import { UI_TRANSLATIONS, COUNTRY_TO_LANGUAGES } from '../constants';
 import jsPDF from 'jspdf';
@@ -215,18 +216,27 @@ export const CryptoTool: React.FC<{ user: UserProfile, assets: CryptoAsset[] }> 
   const [result, setResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // New Live Data Fetcher
   useEffect(() => {
-    const interval = setInterval(() => {
-      setLiveAssets(prev => prev.map(a => {
-        const change = (Math.random() - 0.5) * 50;
-        const percentChange = (Math.random() - 0.5) * 0.5;
-        return {
-          ...a,
-          valueUsd: Math.max(0, a.valueUsd + change),
-          change24h: (a.change24h || 0) + percentChange
-        };
-      }));
-    }, 3000);
+    const fetchLivePrices = async () => {
+        const prices = await getCryptoPrices();
+        if (Object.keys(prices).length > 0) {
+             setLiveAssets(prev => prev.map(asset => {
+                 const marketData = prices[asset.symbol];
+                 if (marketData) {
+                     return { 
+                         ...asset, 
+                         valueUsd: marketData.price * asset.balance, 
+                         change24h: marketData.change 
+                     };
+                 }
+                 return asset;
+             }));
+        }
+    };
+    
+    fetchLivePrices();
+    const interval = setInterval(fetchLivePrices, 10000); // Update every 10s
     return () => clearInterval(interval);
   }, []);
 

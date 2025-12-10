@@ -1,24 +1,29 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
-import { EXCHANGE_RATES, COUNTRY_TO_LANGUAGES } from '../constants';
-import { ArrowRightLeft, TrendingUp, TrendingDown, Plus, Search } from 'lucide-react';
+import { getExchangeRates } from '../services/marketDataService';
+import { COUNTRY_TO_LANGUAGES } from '../constants';
+import { ArrowRightLeft, TrendingUp, TrendingDown, Plus, Search, RefreshCcw } from 'lucide-react';
 
 export const ExchangeRateView: React.FC<{ user: UserProfile }> = ({ user }) => {
     const [amount, setAmount] = useState<number>(1);
     const [baseCurrency, setBaseCurrency] = useState(user.displayCurrency);
+    const [rates, setRates] = useState<Record<string, number>>({});
     const [pinnedCurrencies, setPinnedCurrencies] = useState(['USD', 'EUR', 'GBP', 'AED', 'CNY', 'JPY']);
 
-    const allCurrencies = Object.keys(EXCHANGE_RATES);
-    const baseRate = EXCHANGE_RATES[baseCurrency] || 1;
+    useEffect(() => {
+        const fetchRates = async () => {
+            const liveRates = await getExchangeRates(baseCurrency);
+            // Frankfurter provides rates relative to Base. 
+            // We need to ensure base is present (it's 1.0)
+            liveRates[baseCurrency] = 1.0; 
+            setRates(liveRates);
+        };
+        fetchRates();
+    }, [baseCurrency]);
 
-    // Convert function: (Amount / BaseRate) * TargetRate
-    const convert = (targetCurr: string) => {
-        const targetRate = EXCHANGE_RATES[targetCurr] || 1;
-        // Logic: 1 Base = (1/BaseRate) * TargetRate
-        // So UserAmount Base = (Amount / BaseRate) * TargetRate
-        return (amount / baseRate) * targetRate;
-    };
+    // Available currencies from the live response
+    const allCurrencies = Object.keys(rates).sort();
 
     const getFlag = (curr: string) => {
         const entry = Object.values(COUNTRY_TO_LANGUAGES).find(list => list[0].currency === curr);
@@ -59,7 +64,8 @@ export const ExchangeRateView: React.FC<{ user: UserProfile }> = ({ user }) => {
                             onChange={(e) => setBaseCurrency(e.target.value)}
                             className="w-full bg-slate-800 border border-slate-600 rounded-2xl p-4 text-xl font-bold text-white outline-none focus:border-blue-500 transition-colors appearance-none cursor-pointer"
                          >
-                             {allCurrencies.map(c => <option key={c} value={c}>{getFlag(c)} {c}</option>)}
+                             {/* Fallback list if API hasn't loaded yet */}
+                             {allCurrencies.length > 0 ? allCurrencies.map(c => <option key={c} value={c}>{getFlag(c)} {c}</option>) : <option>{baseCurrency}</option>}
                          </select>
                          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">▼</div>
                      </div>
@@ -70,9 +76,9 @@ export const ExchangeRateView: React.FC<{ user: UserProfile }> = ({ user }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {pinnedCurrencies.map(curr => {
                     if(curr === baseCurrency) return null;
-                    const val = convert(curr);
-                    // Fake change for demo
-                    const isUp = curr.charCodeAt(0) % 2 === 0; 
+                    const rate = rates[curr] || 0;
+                    const val = amount * rate;
+                    const isUp = curr.charCodeAt(0) % 2 === 0; // Simulation for trend arrow since API doesn't give historical data for free easily in one call
                     
                     return (
                         <div key={curr} className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all group">
@@ -81,7 +87,7 @@ export const ExchangeRateView: React.FC<{ user: UserProfile }> = ({ user }) => {
                                      <span className="text-3xl">{getFlag(curr)}</span>
                                      <div>
                                          <h3 className="font-bold text-slate-800 text-xl">{curr}</h3>
-                                         <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">1 {baseCurrency} = {(val/amount).toFixed(4)} {curr}</p>
+                                         <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">1 {baseCurrency} = {rate.toFixed(4)} {curr}</p>
                                      </div>
                                  </div>
                                  {isUp ? <TrendingUp className="text-emerald-500" size={20} /> : <TrendingDown className="text-rose-500" size={20} />}
@@ -89,7 +95,7 @@ export const ExchangeRateView: React.FC<{ user: UserProfile }> = ({ user }) => {
                              <div className="flex items-baseline justify-between pt-4 border-t border-slate-100">
                                  <span className="text-3xl font-mono font-bold text-slate-800">{val.toFixed(2)}</span>
                                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                                     {isUp ? '+' : '-'}{(Math.random()).toFixed(2)}%
+                                     Live Rate
                                  </span>
                              </div>
                         </div>
