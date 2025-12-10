@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { UserProfile, CryptoAsset, SalaryRequest, TranslationDictionary } from '../types';
 import { estimateSalary, runFeasibilityStudy, analyzeCryptoPortfolio, getFeasibilitySuggestion } from '../services/geminiService';
@@ -127,7 +126,6 @@ export const FeasibilityTool: React.FC<{ user: UserProfile }> = ({ user }) => {
       let y = 55;
       splitText.forEach((line: string) => {
         if (y > 270) { doc.addPage(); y = 20; }
-        // Clean the line of markdown-like syntax using global regex
         const cleanLine = line.replace(/\*\*/g, '');
         doc.text(cleanLine, 20, y);
         y += 6;
@@ -161,9 +159,14 @@ export const FeasibilityTool: React.FC<{ user: UserProfile }> = ({ user }) => {
             <button 
               onClick={handleBack} 
               disabled={currentSection === 0} 
-              className={`px-8 py-4 rounded-2xl font-bold flex items-center gap-2 ${currentSection === 0 ? 'text-slate-600 cursor-not-allowed' : 'text-slate-400 hover:text-white'}`}
+              className={`px-8 py-4 rounded-2xl font-bold flex items-center gap-2 ${
+                currentSection === 0 
+                  ? 'text-slate-600 cursor-not-allowed' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
             >
-              {isRTL ? <ChevronRight size={18} /> : <ChevronLeft size={18} />} {t.prev}
+              {isRTL ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+              {t.prev}
             </button>
             
             {isLastSection ? (
@@ -171,14 +174,16 @@ export const FeasibilityTool: React.FC<{ user: UserProfile }> = ({ user }) => {
                 onClick={handleSubmit} 
                 className="px-10 py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center gap-3 shadow-lg hover:bg-blue-500"
               >
-                {t.generate} <Send size={18} />
+                {t.generate} 
+                <Send size={18} />
               </button>
             ) : (
               <button 
                 onClick={handleNext} 
                 className="px-10 py-4 bg-white text-blue-900 rounded-2xl font-bold flex items-center gap-3 hover:bg-slate-200"
               >
-                {t.next} {isRTL ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+                {t.next} 
+                {isRTL ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
               </button>
             )}
           </div>
