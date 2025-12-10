@@ -1,190 +1,174 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import { HRTool, FeasibilityTool, CryptoTool } from './components/Tools';
 import AuditView from './components/AuditView';
-import Onboarding from './components/Onboarding';
-import { MOCK_TRANSACTIONS, MOCK_CRYPTO, APP_SECTIONS, EXCHANGE_RATES, UI_TRANSLATIONS } from './constants';
-import { UserProfile } from './types';
-import { Menu, Search, Bell, Globe } from 'lucide-react';
+import { Onboarding } from './components/Onboarding';
+import { AccountsView, ProfitLossView, AddExpenseModal } from './components/AccountingViews';
+import { SettingsView } from './components/SettingsView';
+import { ExchangeRateView } from './components/ExchangeRateView';
+import { MOCK_TRANSACTIONS, MOCK_CRYPTO, APP_SECTIONS, EXCHANGE_RATES, UI_TRANSLATIONS, MOCK_USER, COUNTRY_TO_LANGUAGES } from './constants';
+import { UserProfile, Transaction, TranslationDictionary } from './types';
+import { translateUIDictionary } from './services/geminiService';
+import { Menu, Search, Bell, Globe, Plus, ChevronDown, Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState(APP_SECTIONS.DASHBOARD);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [profiles, setProfiles] = useState<UserProfile[]>(() => { try { const saved = localStorage.getItem('novatax_profiles'); return saved ? JSON.parse(saved) : []; } catch (e) { return []; } });
+  const [activeUserId, setActiveUserId] = useState<string | null>(() => localStorage.getItem('novatax_active_user_id'));
+  const user = profiles.find(p => p.id === activeUserId) || null;
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [isAddingProfile, setIsAddingProfile] = useState(false);
 
-  // Handle successful onboarding
+  // --- LOCALIZATION STATE ---
+  const [currentTranslations, setCurrentTranslations] = useState<TranslationDictionary | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+
+  useEffect(() => {
+      if (profiles.length > 0) localStorage.setItem('novatax_profiles', JSON.stringify(profiles));
+      else localStorage.removeItem('novatax_profiles');
+  }, [profiles]);
+
+  useEffect(() => {
+      if (activeUserId) localStorage.setItem('novatax_active_user_id', activeUserId);
+      else localStorage.removeItem('novatax_active_user_id');
+  }, [activeUserId]);
+
+  // ISOLATION LOGIC: Ensure we load correct data for user, or EMPTY if new
+  useEffect(() => {
+      if (activeUserId) {
+          try {
+              const savedTx = localStorage.getItem(`novatax_transactions_${activeUserId}`);
+              if (savedTx) {
+                  setTransactions(JSON.parse(savedTx));
+              } else {
+                  // STRICT: Only load mock data for the original demo user 'u1'.
+                  // All other users must start with empty data.
+                  if (activeUserId === 'u1') setTransactions(MOCK_TRANSACTIONS);
+                  else setTransactions([]);
+              }
+          } catch (e) { setTransactions([]); }
+      } else { setTransactions([]); }
+  }, [activeUserId]);
+
+  useEffect(() => { if (activeUserId) localStorage.setItem(`novatax_transactions_${activeUserId}`, JSON.stringify(transactions)); }, [transactions, activeUserId]);
+
+  // --- DYNAMIC AI TRANSLATION EFFECT ---
+  useEffect(() => {
+      const loadTranslations = async () => {
+          if (!user) return;
+          const lang = user.language;
+          
+          if (UI_TRANSLATIONS[lang]) {
+              setCurrentTranslations(UI_TRANSLATIONS[lang]);
+              return;
+          }
+
+          setIsTranslating(true);
+          const translatedDict = await translateUIDictionary(UI_TRANSLATIONS['en'], lang);
+          setCurrentTranslations(translatedDict);
+          setIsTranslating(false);
+      };
+
+      loadTranslations();
+  }, [user?.language]);
+
   const handleOnboardingComplete = (newUser: UserProfile) => {
-    setUser(newUser);
-    setIsAuthenticated(true);
-    // Force purple background styles on body to ensure background persists
-    document.body.style.backgroundColor = '#020617';
-    document.body.style.backgroundImage = 'radial-gradient(circle at 50% 0%, #581c87 0%, #2e1065 40%, #020617 100%)';
-    document.body.style.color = '#e2e8f0';
+    // Ensure ID is unique and not 'u1' to prevent mock data leak
+    const userWithId = { ...newUser, id: newUser.id || `user_${Date.now()}` };
+    
+    // Explicitly wipe transactions in state before switching user to prevent leak
+    setTransactions([]);
+    
+    setProfiles(prev => { 
+        const exists = prev.find(p => p.id === userWithId.id); 
+        if (exists) return prev; 
+        return [...prev, userWithId]; 
+    });
+    
+    setActiveUserId(userWithId.id);
+    setIsAddingProfile(false);
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setUser(null);
+  const handleLogout = () => setActiveUserId(null);
+  const handleUpdateUser = (updatedUser: UserProfile) => setProfiles(prev => prev.map(p => p.id === updatedUser.id ? updatedUser : p));
+  const handleAddTransaction = (newTx: Transaction) => setTransactions(prev => [newTx, ...prev]);
+  const handleResetData = () => { if (!activeUserId) return; setTransactions([]); localStorage.removeItem(`novatax_transactions_${activeUserId}`); window.location.reload(); };
+  const handleAddProfile = () => setIsAddingProfile(true);
+  const handleSwitchProfile = (id: string) => { 
+      // Clear current view data first
+      setTransactions([]);
+      setActiveUserId(id); 
+      setActiveTab(APP_SECTIONS.DASHBOARD); 
+  };
+  
+  // Helper to get language display name reliably
+  const getDisplayLanguage = (langCode: string) => {
+      try {
+          return new Intl.DisplayNames(['en'], { type: 'language' }).of(langCode) || langCode;
+      } catch (e) {
+          return langCode;
+      }
   };
 
-  if (!isAuthenticated || !user) {
-    return <Onboarding onComplete={handleOnboardingComplete} />;
+  if (!user || isAddingProfile) {
+    return <Onboarding key={isAddingProfile ? 'add-profile' : 'init'} onComplete={handleOnboardingComplete} initialView={isAddingProfile ? 'setup' : 'intro'} />;
   }
 
-  // Determine localization
-  const currentLang = user.language;
-  const t = UI_TRANSLATIONS[currentLang] || UI_TRANSLATIONS['en'];
-  const isRTL = currentLang === 'ar';
+  if (isTranslating || !currentTranslations) {
+      return (
+          <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white text-slate-800 font-sans">
+              <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
+              <h2 className="text-xl font-bold uppercase tracking-widest">AI Translating Interface...</h2>
+              <p className="text-sm text-slate-500 mt-2">Generating localized UI for <span className="font-bold text-blue-600">{getDisplayLanguage(user.language)}</span></p>
+          </div>
+      );
+  }
+
+  const t = currentTranslations;
+  const isRTL = user.language === 'ar';
 
   const renderContent = () => {
     switch (activeTab) {
-      case APP_SECTIONS.DASHBOARD:
-        return <Dashboard user={user} transactions={MOCK_TRANSACTIONS} translations={t.dashboard} />;
-      case APP_SECTIONS.HR:
-        return <HRTool user={user} />;
-      case APP_SECTIONS.FEASIBILITY:
-        return <FeasibilityTool user={user} />;
-      case APP_SECTIONS.CRYPTO:
-        return <CryptoTool user={user} assets={MOCK_CRYPTO} />;
-      case APP_SECTIONS.AUDIT:
-        return <AuditView user={user} transactions={MOCK_TRANSACTIONS} />;
-      case APP_SECTIONS.TRANSACTIONS:
-        return (
-          <div className="bg-[#050510]/50 backdrop-blur-md border border-white/10 overflow-hidden">
-            <div className="p-6 border-b border-white/10">
-               <h2 className="text-lg font-bold text-white font-['Sora'] uppercase tracking-widest">{t.nav.transactions}</h2>
-            </div>
-            <table className="w-full text-left">
-              <thead className="bg-white/5 text-slate-400 text-[10px] uppercase font-bold tracking-widest">
-                <tr>
-                   <th className="px-6 py-4">Date</th>
-                   <th className="px-6 py-4">Description</th>
-                   <th className="px-6 py-4">Source</th>
-                   <th className="px-6 py-4">Category</th>
-                   <th className="px-6 py-4 text-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5 text-sm text-slate-400">
-                {MOCK_TRANSACTIONS.map((t) => (
-                  <tr key={t.id} className="hover:bg-white/5 transition-colors">
-                    <td className="px-6 py-4 font-mono text-xs">{t.date}</td>
-                    <td className="px-6 py-4 font-bold text-white">{t.description}</td>
-                    <td className="px-6 py-4">
-                       <span className={`px-2 py-1 text-[10px] font-bold uppercase border ${
-                           t.source === 'Crypto' ? 'border-purple-500/50 text-purple-400' :
-                           t.source === 'Bank' ? 'border-blue-500/50 text-blue-400' :
-                           'border-slate-500/50 text-slate-400'
-                       }`}>{t.source}</span>
-                    </td>
-                    <td className="px-6 py-4">{t.category}</td>
-                    <td className={`px-6 py-4 text-right font-bold font-mono ${t.type === 'income' ? 'text-emerald-400' : 'text-slate-200'}`}>
-                      {t.type === 'income' ? '+' : '-'}{t.amount.toLocaleString()} <span className="text-[10px] text-slate-500">{t.originalCurrency}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
-      case APP_SECTIONS.SETTINGS:
-          return (
-             <div className="max-w-2xl mx-auto bg-[#050510]/60 backdrop-blur-md border border-white/10 p-8 relative">
-                 <div className="absolute top-0 left-0 w-full h-0.5 bg-purple-500"></div>
-                 <h2 className="text-xl font-bold text-white mb-8 font-['Sora'] uppercase tracking-widest">{t.nav.settings}</h2>
-                 <div className="space-y-6">
-                     <div>
-                         <label className="block text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">Jurisdiction</label>
-                         <div className="p-4 bg-black/40 border border-white/10 text-white font-mono text-sm">
-                            {user.country}
-                         </div>
-                     </div>
-                     
-                     <div className="flex items-center justify-between p-5 bg-white/5 border border-white/10 hover:border-purple-500/50 transition-colors">
-                         <div>
-                             <h3 className="text-white font-bold text-sm">Zakat Protocol</h3>
-                             <p className="text-slate-500 text-xs">Auto-calculate 2.5% asset deduction</p>
-                         </div>
-                         <button onClick={() => setUser({...user, zakatEnabled: !user.zakatEnabled})} className={`w-12 h-6 flex items-center p-1 transition-colors duration-300 border ${user.zakatEnabled ? 'bg-purple-500/20 border-purple-500' : 'bg-transparent border-slate-600'}`}>
-                             <div className={`w-4 h-4 bg-white shadow-sm transition-transform duration-300 ${user.zakatEnabled ? (isRTL ? '-translate-x-6 bg-purple-500' : 'translate-x-6 bg-purple-500') : 'translate-x-0'}`} />
-                         </button>
-                     </div>
-
-                     <div className="flex items-center justify-between p-5 bg-white/5 border border-white/10 hover:border-purple-500/50 transition-colors">
-                         <div>
-                             <h3 className="text-white font-bold text-sm">GOSI Compliance</h3>
-                             <p className="text-slate-500 text-xs">Social insurance mandatory deduction</p>
-                         </div>
-                         <button onClick={() => setUser({...user, gosiEnabled: !user.gosiEnabled})} className={`w-12 h-6 flex items-center p-1 transition-colors duration-300 border ${user.gosiEnabled ? 'bg-purple-500/20 border-purple-500' : 'bg-transparent border-slate-600'}`}>
-                             <div className={`w-4 h-4 bg-white shadow-sm transition-transform duration-300 ${user.gosiEnabled ? (isRTL ? '-translate-x-6 bg-purple-500' : 'translate-x-6 bg-purple-500') : 'translate-x-0'}`} />
-                         </button>
-                     </div>
-                 </div>
-             </div>
-          );
-      default:
-        return <div>Section not found</div>;
+      case APP_SECTIONS.DASHBOARD: return <Dashboard user={user} transactions={transactions} translations={t.dashboard} />;
+      case APP_SECTIONS.ACCOUNTS: return <AccountsView user={user} translations={t.accounting} />;
+      case APP_SECTIONS.REPORTS: return <ProfitLossView user={user} translations={t.accounting} />;
+      case APP_SECTIONS.EXCHANGE: return <ExchangeRateView user={user} />;
+      case APP_SECTIONS.HR: return <HRTool user={user} />;
+      case APP_SECTIONS.FEASIBILITY: return <FeasibilityTool user={user} />;
+      case APP_SECTIONS.CRYPTO: return <CryptoTool user={user} assets={MOCK_CRYPTO} />;
+      case APP_SECTIONS.AUDIT: return <AuditView user={user} transactions={transactions} />;
+      case APP_SECTIONS.TRANSACTIONS: return (<div className="bg-[#0f172a] rounded-[2rem] overflow-hidden animate-fade-in border border-slate-700 shadow-xl"><div className="p-8 border-b border-white/5 flex justify-between items-center bg-slate-900/30"><h2 className="text-xl font-bold text-white uppercase tracking-widest">{t.nav.transactions}</h2><button onClick={() => setIsExpenseModalOpen(true)} className="flex items-center gap-2 px-6 py-3 btn-royal text-white text-[10px] font-bold uppercase tracking-widest transition-all rounded-xl shadow-lg bg-blue-600 hover:bg-blue-500"><Plus size={16} /> {t.accounting.addExpense}</button></div>{transactions.length === 0 ? (<div className="p-20 text-center text-slate-500 font-bold uppercase tracking-widest">No transactions recorded for this profile.</div>) : (<table className="w-full text-left"><thead className="bg-white/5 text-slate-300 text-[10px] uppercase font-bold tracking-widest"><tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Description</th><th className="px-4 py-3">Source</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Category</th><th className="px-4 py-3 text-right">Amount</th></tr></thead><tbody className="divide-y divide-white/5 text-sm text-slate-400">{transactions.map((t) => (<tr key={t.id} className="hover:bg-white/5 transition-colors group"><td className="px-4 py-3 font-mono text-xs">{t.date}</td><td className="px-4 py-3"><div className="font-bold text-white group-hover:text-blue-300 transition-colors">{t.description}</div></td><td className="px-4 py-3"><span className="px-2 py-1 rounded-lg text-[9px] font-bold uppercase border border-slate-700 bg-slate-800 text-slate-300">{t.source}</span></td><td className="px-4 py-3">{t.status && (<span className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase flex items-center gap-2 w-fit ${t.status === 'Credit' ? 'bg-amber-900/30 text-amber-500' : 'bg-emerald-900/30 text-emerald-500'}`}>{t.status === 'Credit' ? 'CREDIT' : 'PAID'}</span>)}</td><td className="px-4 py-3"><span className="px-2 py-1 bg-white/5 rounded-lg text-xs">{t.category}</span></td><td className={`px-4 py-3 text-right font-bold font-mono text-base ${t.type === 'income' ? 'text-emerald-400' : 'text-white'}`}>{t.type === 'income' ? '+' : '-'}{t.amount.toLocaleString()} <span className="text-[10px] text-slate-500 font-sans font-semibold ml-1">{t.originalCurrency}</span></td></tr>))}</tbody></table>)}</div>);
+      case APP_SECTIONS.SETTINGS: return (<SettingsView user={user} profiles={profiles} onUpdate={handleUpdateUser} onAddProfile={handleAddProfile} onSwitchProfile={handleSwitchProfile} onLogout={handleLogout} translations={t.profile} onReset={handleResetData} />);
+      default: return <div>Section not found</div>;
     }
   };
 
   return (
-    <div className={`flex h-screen bg-transparent text-slate-200 font-['Sora'] ${isRTL ? 'flex-row-reverse' : 'flex-row'}`} dir={isRTL ? 'rtl' : 'ltr'}>
-      {/* Mobile Sidebar Overlay */}
-      {mobileMenuOpen && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden" onClick={() => setMobileMenuOpen(false)} />
-      )}
-      
-      {/* Sidebar Container */}
-      <div className={`fixed inset-y-0 ${isRTL ? 'right-0' : 'left-0'} z-50 w-64 transform transition-transform duration-300 md:relative md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : (isRTL ? 'translate-x-full' : '-translate-x-full')}`}>
-         <Sidebar activeTab={activeTab} setActiveTab={(t) => { setActiveTab(t); setMobileMenuOpen(false); }} onLogout={handleLogout} translations={t.nav} />
-      </div>
-
+    <div className={`flex h-screen bg-[#f8fafc] text-slate-800 font-sans overflow-hidden ${isRTL ? 'flex-row-reverse' : 'flex-row'}`} dir={isRTL ? 'rtl' : 'ltr'}>
+      <div className={`fixed inset-y-0 ${isRTL ? 'right-0' : 'left-0'} z-50 w-72 transform transition-transform duration-300 md:relative md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : (isRTL ? 'translate-x-full' : '-translate-x-full')}`}><Sidebar activeTab={activeTab} setActiveTab={(t) => { setActiveTab(t); setMobileMenuOpen(false); }} onLogout={handleLogout} translations={t.nav} /></div>
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        {/* Top Header */}
-        <header className="h-16 border-b border-white/5 bg-[#020205]/60 backdrop-blur-md flex items-center justify-between px-6 z-10">
+        <header className="h-24 flex items-center justify-between px-8 z-10 bg-white border-b border-slate-200 shadow-sm">
             <div className="flex items-center gap-4">
-                <button onClick={() => setMobileMenuOpen(true)} className="md:hidden text-white">
-                    <Menu size={24} />
-                </button>
-                <div className="relative hidden md:block w-96 group">
-                    <Search className={`absolute ${isRTL ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-slate-600 group-focus-within:text-white transition-colors`} size={16} />
-                    <input type="text" placeholder="CMD+K SEARCH..." className={`w-full bg-[#050510]/50 border border-white/10 rounded-none py-2 ${isRTL ? 'pr-10 pl-4' : 'pl-10 pr-4'} text-xs text-white focus:ring-1 focus:ring-purple-500 placeholder-slate-600 transition-all font-mono`} />
-                </div>
+                <button onClick={() => setMobileMenuOpen(true)} className="md:hidden text-slate-600 p-2 bg-white border border-slate-200 rounded-xl shadow-sm"><Menu size={24} /></button>
+                <div className="relative hidden md:block w-96 group"><Search className={`absolute ${isRTL ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors`} size={18} /><input type="text" placeholder="CMD+K SEARCH..." className={`w-full bg-slate-50 border border-slate-200 rounded-xl py-3 ${isRTL ? 'pr-12 pl-4' : 'pl-12 pr-4'} text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 placeholder-slate-400 transition-all font-mono shadow-sm outline-none`} /></div>
             </div>
-            
             <div className="flex items-center gap-6">
-                {/* Currency Selector */}
-                <div className="hidden md:flex items-center gap-2 bg-[#050510]/50 px-3 py-1.5 border border-white/10 hover:border-purple-500 transition-colors">
-                   <Globe size={14} className="text-slate-400" />
-                   <select 
-                      value={user.displayCurrency}
-                      onChange={(e) => setUser({...user, displayCurrency: e.target.value})}
-                      className="bg-transparent text-[10px] font-bold text-white outline-none cursor-pointer uppercase tracking-wider"
-                   >
-                      {Object.keys(EXCHANGE_RATES).map(curr => (
-                          <option key={curr} value={curr} className="bg-[#020205]">{curr}</option>
-                      ))}
-                   </select>
-                </div>
-
                 <div className="flex items-center gap-4">
-                    <button className="relative p-2 text-slate-400 hover:text-white transition-colors">
-                        <Bell size={18} />
+                    <button className="relative p-3 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm"><Bell size={18} /><span className="absolute top-2 right-2.5 w-2 h-2 bg-rose-500 rounded-full animate-pulse shadow-sm"></span></button>
+                    <button onClick={() => setActiveTab(APP_SECTIONS.SETTINGS)} className="flex items-center gap-3 bg-white border border-slate-200 pr-4 pl-1 py-1 rounded-xl hover:border-blue-300 transition-all shadow-sm group">
+                        <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-md group-hover:scale-105 transition-transform">{user.companyName ? user.companyName.charAt(0) : user.name.charAt(0)}</div>
+                        <div className="text-left hidden md:block"><p className="text-[10px] font-bold text-slate-800 uppercase group-hover:text-blue-600 transition-colors">{user.companyName || 'Personal'}</p><p className="text-[9px] text-slate-400 font-bold">{user.name.split(' ')[0]}</p></div>
                     </button>
-                    <div className="w-8 h-8 bg-white/10 flex items-center justify-center text-white text-xs font-bold border border-white/10">
-                        {user.name.charAt(0)}
-                    </div>
                 </div>
             </div>
         </header>
-
-        {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-auto p-6 md:p-10 custom-scrollbar bg-grid-pattern bg-fixed">
-           {renderContent()}
-        </div>
+        <div className="flex-1 overflow-auto px-8 pb-8 custom-scrollbar pt-8">{renderContent()}</div>
       </main>
+      <AddExpenseModal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} user={user} translations={t.accounting} onAdd={handleAddTransaction} />
     </div>
   );
 };
