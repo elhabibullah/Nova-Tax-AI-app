@@ -156,9 +156,31 @@ export const FeasibilityTool: React.FC<{ user: UserProfile }> = ({ user }) => {
         <div className="p-8 md:p-16">
           <div className="flex justify-between items-center mb-10 pb-6 border-b border-white/10"><h3 className="text-2xl font-bold text-white">{sectionTitle}</h3><span className="text-xs font-bold text-slate-400 uppercase tracking-widest bg-white/5 px-3 py-1 rounded-full">{t.step} {currentSection + 1} {t.of} {FEASIBILITY_STRUCTURE.length}</span></div>
           <div className="space-y-10">{sectionData.questions.map((q) => { const label = t.questions[q.qId as keyof typeof t.questions]; return (<div key={q.id}><div className="flex justify-between items-center mb-3"><label className="block text-sm font-bold text-slate-300">{label}</label><button onClick={() => handleMagicSuggest(q.id, label)} disabled={suggestionLoading === q.id} className="text-[10px] font-bold uppercase tracking-widest text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500/30 px-3 py-1.5 rounded-full flex items-center gap-2 border border-blue-500/20">{suggestionLoading === q.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}{t.aiAssist}</button></div>{q.type === 'textarea' ? (<textarea rows={5} className="w-full bg-slate-800 border border-slate-600 rounded-2xl p-5 text-white focus:border-blue-500 outline-none" value={answers[q.id] || ''} onChange={(e) => handleInputChange(q.id, e.target.value)} />) : (<input type="text" className="w-full bg-slate-800 border border-slate-600 rounded-2xl p-5 text-white focus:border-blue-500 outline-none" value={answers[q.id] || ''} onChange={(e) => handleInputChange(q.id, e.target.value)} />)}</div>); })}</div>
+          
           <div className="flex justify-between mt-16 pt-10 border-t border-white/10">
-            <button onClick={handleBack} disabled={currentSection === 0} className={`px-8 py-4 rounded-2xl font-bold flex items-center gap-2 ${currentSection === 0 ? 'text-slate-600 cursor-not-allowed' : 'text-slate-400 hover:text-white'}`}>{isRTL ? <ChevronRight size={18} /> : <ChevronLeft size={18} />} {t.prev}</button>
-            {isLastSection ? (<button onClick={handleSubmit} className="px-10 py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center gap-3 shadow-lg hover:bg-blue-500">{t.generate} <Send size={18} /></button>) : (<button onClick={handleNext} className="px-10 py-4 bg-white text-blue-900 rounded-2xl font-bold flex items-center gap-3 hover:bg-slate-200">{t.next} {isRTL ? <ChevronLeft size={16} /> : <ChevronRight size={16} /></button>)}
+            <button 
+              onClick={handleBack} 
+              disabled={currentSection === 0} 
+              className={`px-8 py-4 rounded-2xl font-bold flex items-center gap-2 ${currentSection === 0 ? 'text-slate-600 cursor-not-allowed' : 'text-slate-400 hover:text-white'}`}
+            >
+              {isRTL ? <ChevronRight size={18} /> : <ChevronLeft size={18} />} {t.prev}
+            </button>
+            
+            {isLastSection ? (
+              <button 
+                onClick={handleSubmit} 
+                className="px-10 py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center gap-3 shadow-lg hover:bg-blue-500"
+              >
+                {t.generate} <Send size={18} />
+              </button>
+            ) : (
+              <button 
+                onClick={handleNext} 
+                className="px-10 py-4 bg-white text-blue-900 rounded-2xl font-bold flex items-center gap-3 hover:bg-slate-200"
+              >
+                {t.next} {isRTL ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+              </button>
+            )}
           </div>
         </div>
       </div>
