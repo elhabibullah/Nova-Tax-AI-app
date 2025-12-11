@@ -128,7 +128,18 @@ export const COUNTRY_TO_LANGUAGES: Record<string, { code: string; name: string; 
     'Default': [{ code: 'en', name: 'English', nativeName: 'English', flag: '🌐', currency: 'USD' }]
 };
 
-export const STRIPE_KEY = process.env.STRIPE_KEY;
+// Hybrid Safe Access
+// @ts-ignore
+const getSafeEnv = (key: string, viteValue: any) => {
+    // @ts-ignore
+    if (typeof window !== 'undefined' && window.process?.env?.[key]) {
+        // @ts-ignore
+        return window.process.env[key];
+    }
+    return viteValue || '';
+};
+
+export const STRIPE_KEY = getSafeEnv('STRIPE_KEY', process.env.STRIPE_KEY);
 export const STRIPE_PRICE_ID = 'price_1PqXy...'; // Placeholder until provided
 
 export const TAX_RATES: Record<string, { standard: number; reduced: number; name: string }> = {

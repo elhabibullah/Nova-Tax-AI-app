@@ -1,8 +1,20 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { UserProfile, Transaction, CryptoAsset, SalaryRequest, FeasibilityRequest, TranslationDictionary } from "../types";
 
+// Helper for safe environment access
+// @ts-ignore
+const getApiKey = () => {
+    // @ts-ignore
+    if (typeof window !== 'undefined' && window.process?.env?.API_KEY) {
+        // @ts-ignore
+        return window.process.env.API_KEY;
+    }
+    return process.env.API_KEY || '';
+};
+
 // Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 // Helper to format currency
 const formatCurrency = (amount: number, currency: string) => {

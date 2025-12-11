@@ -2,9 +2,19 @@
 import { createClient } from '@supabase/supabase-js';
 import { UserProfile, Transaction } from '../types';
 
-// Initialize with the keys injected via vite.config.ts
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_KEY || '';
+// Hybrid access: works with Vite build replacement AND raw browser window injection
+// @ts-ignore
+const getSafeEnv = (key: string, viteValue: any) => {
+    // @ts-ignore
+    if (typeof window !== 'undefined' && window.process?.env?.[key]) {
+        // @ts-ignore
+        return window.process.env[key];
+    }
+    return viteValue || '';
+};
+
+const supabaseUrl = getSafeEnv('SUPABASE_URL', process.env.SUPABASE_URL);
+const supabaseKey = getSafeEnv('SUPABASE_KEY', process.env.SUPABASE_KEY);
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -15,7 +25,6 @@ export const loadProfiles = async (): Promise<UserProfile[]> => {
         const { data, error } = await supabase.from('novatax_profiles').select('*');
         if (error) {
             console.error('Supabase: Error loading profiles', error);
-            // Fallback to local storage if table doesn't exist yet
             const saved = localStorage.getItem('novatax_profiles');
             return saved ? JSON.parse(saved) : [];
         }
@@ -27,7 +36,7 @@ export const loadProfiles = async (): Promise<UserProfile[]> => {
 };
 
 export const upsertProfile = async (profile: UserProfile) => {
-    // Save to local as backup
+    // Local backup
     const saved = localStorage.getItem('novatax_profiles');
     const profiles = saved ? JSON.parse(saved) : [];
     const newProfiles = profiles.some((p: any) => p.id === profile.id) 
@@ -35,7 +44,7 @@ export const upsertProfile = async (profile: UserProfile) => {
         : [...profiles, profile];
     localStorage.setItem('novatax_profiles', JSON.stringify(newProfiles));
 
-    // Save to Supabase
+    // Supabase
     const { error } = await supabase.from('novatax_profiles').upsert({ id: profile.id, data: profile });
     if (error) console.error('Supabase: Error saving profile', error);
 };
@@ -50,8 +59,6 @@ export const loadTransactions = async (userId: string): Promise<Transaction[]> =
             const saved = localStorage.getItem(`novatax_transactions_${userId}`);
             return saved ? JSON.parse(saved) : [];
         }
-        // If data is empty but we have local data, migrate it?
-        // For now, just return what DB has or empty.
         return data.map((row: any) => row.data as Transaction);
     } catch (e) {
         return [];
