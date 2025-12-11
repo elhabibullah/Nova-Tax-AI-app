@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -7,55 +8,65 @@ import { Onboarding } from './components/Onboarding';
 import { AccountsView, ProfitLossView, AddExpenseModal } from './components/AccountingViews';
 import { SettingsView } from './components/SettingsView';
 import { ExchangeRateView } from './components/ExchangeRateView';
-import { MOCK_TRANSACTIONS, MOCK_CRYPTO, APP_SECTIONS, EXCHANGE_RATES, UI_TRANSLATIONS, MOCK_USER, COUNTRY_TO_LANGUAGES } from './constants';
+import { MOCK_TRANSACTIONS, MOCK_CRYPTO, APP_SECTIONS, UI_TRANSLATIONS, MOCK_USER } from './constants';
 import { UserProfile, Transaction, TranslationDictionary } from './types';
 import { translateUIDictionary } from './services/geminiService';
-import { Menu, Search, Bell, Globe, Plus, ChevronDown, Loader2 } from 'lucide-react';
+import { loadProfiles, upsertProfile, loadTransactions, saveTransaction, wipeTransactions } from './services/supabaseService';
+import { Menu, Search, Bell, Plus, Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState(APP_SECTIONS.DASHBOARD);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [profiles, setProfiles] = useState<UserProfile[]>(() => { try { const saved = localStorage.getItem('novatax_profiles'); return saved ? JSON.parse(saved) : []; } catch (e) { return []; } });
+  
+  // Data State
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [activeUserId, setActiveUserId] = useState<string | null>(() => localStorage.getItem('novatax_active_user_id'));
-  const user = profiles.find(p => p.id === activeUserId) || null;
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  
+  // UI State
+  const [loadingData, setLoadingData] = useState(true);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isAddingProfile, setIsAddingProfile] = useState(false);
 
-  // --- LOCALIZATION STATE ---
+  // Localization State
   const [currentTranslations, setCurrentTranslations] = useState<TranslationDictionary | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
 
-  useEffect(() => {
-      if (profiles.length > 0) localStorage.setItem('novatax_profiles', JSON.stringify(profiles));
-      else localStorage.removeItem('novatax_profiles');
-  }, [profiles]);
+  const user = profiles.find(p => p.id === activeUserId) || null;
 
+  // 1. Load Profiles from Supabase on Mount
   useEffect(() => {
-      if (activeUserId) localStorage.setItem('novatax_active_user_id', activeUserId);
-      else localStorage.removeItem('novatax_active_user_id');
-  }, [activeUserId]);
+      const initData = async () => {
+          setLoadingData(true);
+          const loadedProfiles = await loadProfiles();
+          setProfiles(loadedProfiles);
+          setLoadingData(false);
+      };
+      initData();
+  }, []);
 
-  // ISOLATION LOGIC: Ensure we load correct data for user, or EMPTY if new
+  // 2. Load Transactions when Active User Changes
   useEffect(() => {
       if (activeUserId) {
-          try {
-              const savedTx = localStorage.getItem(`novatax_transactions_${activeUserId}`);
-              if (savedTx) {
-                  setTransactions(JSON.parse(savedTx));
+          localStorage.setItem('novatax_active_user_id', activeUserId);
+          const fetchTx = async () => {
+              // Special case: Mock User 'u1' always gets mock transactions if DB is empty?
+              // For now, we trust the DB/Service.
+              const loadedTx = await loadTransactions(activeUserId);
+              if (loadedTx.length === 0 && activeUserId === 'u1') {
+                   setTransactions(MOCK_TRANSACTIONS);
               } else {
-                  // STRICT: Only load mock data for the original demo user 'u1'.
-                  // All other users must start with empty data.
-                  if (activeUserId === 'u1') setTransactions(MOCK_TRANSACTIONS);
-                  else setTransactions([]);
+                   setTransactions(loadedTx);
               }
-          } catch (e) { setTransactions([]); }
-      } else { setTransactions([]); }
+          };
+          fetchTx();
+      } else {
+          localStorage.removeItem('novatax_active_user_id');
+          setTransactions([]);
+      }
   }, [activeUserId]);
 
-  useEffect(() => { if (activeUserId) localStorage.setItem(`novatax_transactions_${activeUserId}`, JSON.stringify(transactions)); }, [transactions, activeUserId]);
-
-  // --- DYNAMIC AI TRANSLATION EFFECT ---
+  // 3. Translation Logic
   useEffect(() => {
       const loadTranslations = async () => {
           if (!user) return;
@@ -75,45 +86,71 @@ const App: React.FC = () => {
       loadTranslations();
   }, [user?.language]);
 
-  const handleOnboardingComplete = (newUser: UserProfile) => {
-    // Ensure ID is unique and not 'u1' to prevent mock data leak
+  // --- Handlers ---
+
+  const handleOnboardingComplete = async (newUser: UserProfile) => {
     const userWithId = { ...newUser, id: newUser.id || `user_${Date.now()}` };
     
-    // Explicitly wipe transactions in state before switching user to prevent leak
-    setTransactions([]);
-    
-    setProfiles(prev => { 
-        const exists = prev.find(p => p.id === userWithId.id); 
-        if (exists) return prev; 
-        return [...prev, userWithId]; 
+    // Save to State
+    setProfiles(prev => {
+        const exists = prev.find(p => p.id === userWithId.id);
+        if (exists) return prev;
+        return [...prev, userWithId];
     });
+
+    // Save to DB
+    await upsertProfile(userWithId);
     
+    // Set Active
+    setTransactions([]);
     setActiveUserId(userWithId.id);
     setIsAddingProfile(false);
   };
 
   const handleLogout = () => setActiveUserId(null);
-  const handleUpdateUser = (updatedUser: UserProfile) => setProfiles(prev => prev.map(p => p.id === updatedUser.id ? updatedUser : p));
-  const handleAddTransaction = (newTx: Transaction) => setTransactions(prev => [newTx, ...prev]);
-  const handleResetData = () => { if (!activeUserId) return; setTransactions([]); localStorage.removeItem(`novatax_transactions_${activeUserId}`); window.location.reload(); };
+
+  const handleUpdateUser = async (updatedUser: UserProfile) => {
+      setProfiles(prev => prev.map(p => p.id === updatedUser.id ? updatedUser : p));
+      await upsertProfile(updatedUser);
+  };
+
+  const handleAddTransaction = async (newTx: Transaction) => {
+      if (!activeUserId) return;
+      setTransactions(prev => [newTx, ...prev]);
+      await saveTransaction(activeUserId, newTx);
+  };
+
+  const handleResetData = async () => { 
+      if (!activeUserId) return; 
+      setTransactions([]); 
+      await wipeTransactions(activeUserId);
+      window.location.reload(); 
+  };
+
   const handleAddProfile = () => setIsAddingProfile(true);
+  
   const handleSwitchProfile = (id: string) => { 
-      // Clear current view data first
       setTransactions([]);
       setActiveUserId(id); 
       setActiveTab(APP_SECTIONS.DASHBOARD); 
   };
   
-  // Helper to get language display name reliably
   const getDisplayLanguage = (langCode: string) => {
-      try {
-          return new Intl.DisplayNames(['en'], { type: 'language' }).of(langCode) || langCode;
-      } catch (e) {
-          return langCode;
-      }
+      try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(langCode) || langCode; } catch (e) { return langCode; }
   };
 
-  if (!user || isAddingProfile) {
+  // --- Render Logic ---
+
+  if (loadingData) {
+      return (
+          <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0f172a] text-white">
+              <Loader2 className="animate-spin text-blue-500 mb-4" size={48} />
+              <p className="text-sm font-bold uppercase tracking-widest">Connecting to Global Nodes...</p>
+          </div>
+      );
+  }
+
+  if ((!user || isAddingProfile) && !loadingData) {
     return <Onboarding key={isAddingProfile ? 'add-profile' : 'init'} onComplete={handleOnboardingComplete} initialView={isAddingProfile ? 'setup' : 'intro'} />;
   }
 
@@ -122,26 +159,26 @@ const App: React.FC = () => {
           <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white text-slate-800 font-sans">
               <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
               <h2 className="text-xl font-bold uppercase tracking-widest">AI Translating Interface...</h2>
-              <p className="text-sm text-slate-500 mt-2">Generating localized UI for <span className="font-bold text-blue-600">{getDisplayLanguage(user.language)}</span></p>
+              <p className="text-sm text-slate-500 mt-2">Generating localized UI for <span className="font-bold text-blue-600">{getDisplayLanguage(user?.language || 'en')}</span></p>
           </div>
       );
   }
 
   const t = currentTranslations;
-  const isRTL = user.language === 'ar';
+  const isRTL = user?.language === 'ar';
 
   const renderContent = () => {
     switch (activeTab) {
-      case APP_SECTIONS.DASHBOARD: return <Dashboard user={user} transactions={transactions} translations={t.dashboard} />;
-      case APP_SECTIONS.ACCOUNTS: return <AccountsView user={user} translations={t.accounting} />;
-      case APP_SECTIONS.REPORTS: return <ProfitLossView user={user} translations={t.accounting} />;
-      case APP_SECTIONS.EXCHANGE: return <ExchangeRateView user={user} />;
-      case APP_SECTIONS.HR: return <HRTool user={user} />;
-      case APP_SECTIONS.FEASIBILITY: return <FeasibilityTool user={user} />;
-      case APP_SECTIONS.CRYPTO: return <CryptoTool user={user} assets={MOCK_CRYPTO} />;
-      case APP_SECTIONS.AUDIT: return <AuditView user={user} transactions={transactions} />;
+      case APP_SECTIONS.DASHBOARD: return <Dashboard user={user!} transactions={transactions} translations={t.dashboard} />;
+      case APP_SECTIONS.ACCOUNTS: return <AccountsView user={user!} translations={t.accounting} />;
+      case APP_SECTIONS.REPORTS: return <ProfitLossView user={user!} translations={t.accounting} />;
+      case APP_SECTIONS.EXCHANGE: return <ExchangeRateView user={user!} />;
+      case APP_SECTIONS.HR: return <HRTool user={user!} />;
+      case APP_SECTIONS.FEASIBILITY: return <FeasibilityTool user={user!} />;
+      case APP_SECTIONS.CRYPTO: return <CryptoTool user={user!} assets={MOCK_CRYPTO} />;
+      case APP_SECTIONS.AUDIT: return <AuditView user={user!} transactions={transactions} />;
       case APP_SECTIONS.TRANSACTIONS: return (<div className="bg-[#0f172a] rounded-[2rem] overflow-hidden animate-fade-in border border-slate-700 shadow-xl"><div className="p-8 border-b border-white/5 flex justify-between items-center bg-slate-900/30"><h2 className="text-xl font-bold text-white uppercase tracking-widest">{t.nav.transactions}</h2><button onClick={() => setIsExpenseModalOpen(true)} className="flex items-center gap-2 px-6 py-3 btn-royal text-white text-[10px] font-bold uppercase tracking-widest transition-all rounded-xl shadow-lg bg-blue-600 hover:bg-blue-500"><Plus size={16} /> {t.accounting.addExpense}</button></div>{transactions.length === 0 ? (<div className="p-20 text-center text-slate-500 font-bold uppercase tracking-widest">No transactions recorded for this profile.</div>) : (<table className="w-full text-left"><thead className="bg-white/5 text-slate-300 text-[10px] uppercase font-bold tracking-widest"><tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Description</th><th className="px-4 py-3">Source</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Category</th><th className="px-4 py-3 text-right">Amount</th></tr></thead><tbody className="divide-y divide-white/5 text-sm text-slate-400">{transactions.map((t) => (<tr key={t.id} className="hover:bg-white/5 transition-colors group"><td className="px-4 py-3 font-mono text-xs">{t.date}</td><td className="px-4 py-3"><div className="font-bold text-white group-hover:text-blue-300 transition-colors">{t.description}</div></td><td className="px-4 py-3"><span className="px-2 py-1 rounded-lg text-[9px] font-bold uppercase border border-slate-700 bg-slate-800 text-slate-300">{t.source}</span></td><td className="px-4 py-3">{t.status && (<span className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase flex items-center gap-2 w-fit ${t.status === 'Credit' ? 'bg-amber-900/30 text-amber-500' : 'bg-emerald-900/30 text-emerald-500'}`}>{t.status === 'Credit' ? 'CREDIT' : 'PAID'}</span>)}</td><td className="px-4 py-3"><span className="px-2 py-1 bg-white/5 rounded-lg text-xs">{t.category}</span></td><td className={`px-4 py-3 text-right font-bold font-mono text-base ${t.type === 'income' ? 'text-emerald-400' : 'text-white'}`}>{t.type === 'income' ? '+' : '-'}{t.amount.toLocaleString()} <span className="text-[10px] text-slate-500 font-sans font-semibold ml-1">{t.originalCurrency}</span></td></tr>))}</tbody></table>)}</div>);
-      case APP_SECTIONS.SETTINGS: return (<SettingsView user={user} profiles={profiles} onUpdate={handleUpdateUser} onAddProfile={handleAddProfile} onSwitchProfile={handleSwitchProfile} onLogout={handleLogout} translations={t.profile} onReset={handleResetData} />);
+      case APP_SECTIONS.SETTINGS: return (<SettingsView user={user!} profiles={profiles} onUpdate={handleUpdateUser} onAddProfile={handleAddProfile} onSwitchProfile={handleSwitchProfile} onLogout={handleLogout} translations={t.profile} onReset={handleResetData} />);
       default: return <div>Section not found</div>;
     }
   };
@@ -158,16 +195,18 @@ const App: React.FC = () => {
             <div className="flex items-center gap-6">
                 <div className="flex items-center gap-4">
                     <button className="relative p-3 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm"><Bell size={18} /><span className="absolute top-2 right-2.5 w-2 h-2 bg-rose-500 rounded-full animate-pulse shadow-sm"></span></button>
-                    <button onClick={() => setActiveTab(APP_SECTIONS.SETTINGS)} className="flex items-center gap-3 bg-white border border-slate-200 pr-4 pl-1 py-1 rounded-xl hover:border-blue-300 transition-all shadow-sm group">
-                        <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-md group-hover:scale-105 transition-transform">{user.companyName ? user.companyName.charAt(0) : user.name.charAt(0)}</div>
-                        <div className="text-left hidden md:block"><p className="text-[10px] font-bold text-slate-800 uppercase group-hover:text-blue-600 transition-colors">{user.companyName || 'Personal'}</p><p className="text-[9px] text-slate-400 font-bold">{user.name.split(' ')[0]}</p></div>
-                    </button>
+                    {user && (
+                        <button onClick={() => setActiveTab(APP_SECTIONS.SETTINGS)} className="flex items-center gap-3 bg-white border border-slate-200 pr-4 pl-1 py-1 rounded-xl hover:border-blue-300 transition-all shadow-sm group">
+                            <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-md group-hover:scale-105 transition-transform">{user.companyName ? user.companyName.charAt(0) : user.name.charAt(0)}</div>
+                            <div className="text-left hidden md:block"><p className="text-[10px] font-bold text-slate-800 uppercase group-hover:text-blue-600 transition-colors">{user.companyName || 'Personal'}</p><p className="text-[9px] text-slate-400 font-bold">{user.name.split(' ')[0]}</p></div>
+                        </button>
+                    )}
                 </div>
             </div>
         </header>
         <div className="flex-1 overflow-auto px-8 pb-8 custom-scrollbar pt-8">{renderContent()}</div>
       </main>
-      <AddExpenseModal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} user={user} translations={t.accounting} onAdd={handleAddTransaction} />
+      <AddExpenseModal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} user={user!} translations={t.accounting} onAdd={handleAddTransaction} />
     </div>
   );
 };

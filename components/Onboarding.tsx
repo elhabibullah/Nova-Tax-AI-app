@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { UserProfile } from '../types';
-import { MOCK_USER, COUNTRY_TO_LANGUAGES, EXCHANGE_RATES, UI_TRANSLATIONS } from '../constants';
+import { MOCK_USER, COUNTRY_TO_LANGUAGES, EXCHANGE_RATES, UI_TRANSLATIONS, STRIPE_KEY, STRIPE_PRICE_ID } from '../constants';
 import { ChevronRight, Loader2, MapPin, Globe, FastForward, Search, Terminal, CreditCard, ShieldCheck, Zap, X, Building2, User, CalendarDays, CheckCircle, Check, Lock } from 'lucide-react';
 import { translateUIDictionary } from '../services/geminiService';
 
@@ -121,7 +121,41 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, initialView 
     onComplete(updatedUser);
   };
 
-  const handleSubscribe = () => { setViewState('setup'); };
+  const handleSubscribe = async () => {
+    // Check if Stripe is loaded
+    // @ts-ignore
+    if (typeof Stripe === 'undefined') {
+        console.error("Stripe.js not loaded");
+        setViewState('setup');
+        return;
+    }
+    
+    try {
+        // @ts-ignore
+        const stripe = Stripe(STRIPE_KEY);
+        if (!stripe) {
+             console.error("Stripe failed to initialize with provided key");
+             setViewState('setup');
+             return;
+        }
+
+        const { error } = await stripe.redirectToCheckout({
+            lineItems: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
+            mode: 'subscription',
+            successUrl: window.location.href, // Redirect back to this page on success
+            cancelUrl: window.location.href,
+        });
+
+        if (error) {
+            console.warn("Stripe Checkout Warning (likely invalid Price ID):", error);
+            // Fallback to setup view so user isn't stuck
+            setViewState('setup'); 
+        }
+    } catch (e) {
+        console.error("Stripe Error:", e);
+        setViewState('setup');
+    }
+  };
 
   const handleCompleteRegistration = () => {
       const newUser: UserProfile = {
@@ -244,7 +278,10 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, initialView 
                             <div className="space-y-8">
                                  <img src="https://fit-4rce-x.s3.eu-north-1.amazonaws.com/NovaTax__logo-invisible-background.png" alt="NovaTax AI" className="w-full max-w-3xl object-contain mb-8 logo-glow" />
                                 <h1 className="text-4xl md:text-6xl font-extrabold text-white leading-tight tracking-tight drop-shadow-xl">{t.title}</h1>
-                                <p className="text-lg md:text-xl text-slate-300 font-light leading-relaxed max-w-3xl drop-shadow-md border-l-4 border-blue-500 pl-6">{t.desc}</p>
+                                {/* FORCED FULL TEXT DISPLAY: whitespace-normal break-words */}
+                                <div className="h-auto w-full">
+                                  <p className="text-lg md:text-xl text-slate-300 font-light leading-relaxed max-w-3xl drop-shadow-md border-l-4 border-blue-500 pl-6 whitespace-normal break-words overflow-visible">{t.desc}</p>
+                                </div>
                             </div>
                             <div className="w-full max-w-md">
                                 <button onClick={() => setIsLoginOpen(true)} className="w-full bg-[#1e293b] hover:bg-white/10 text-white border border-white/20 font-bold py-4 text-xs rounded-xl uppercase tracking-widest transition-all mb-4 shadow-lg">{t.loginBtn}</button>

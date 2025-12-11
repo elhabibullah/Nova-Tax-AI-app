@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -5,6 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NovaTax AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://js.stripe.com/v3/"></script>
+    <!-- GLOBAL ENVIRONMENT POLYFILL FOR PREVIEW MODE -->
+    <script>
+      window.process = {
+        env: {
+          API_KEY: "AIzaSyA_xBY3dlRY6pKNG9ktHoR47pVKJ_fP-5Y",
+          STRIPE_KEY: "pk_live_51Scm2cBCXsokFfTm0aniHE9BYcpaPFSNYkyzaPLiFPmM03QhX0k8fy3NdTxFAK0WKsDbRYpWb9gHZ48UIljMp7CW00USsOj8Ey",
+          SUPABASE_URL: "https://pfifofsdjlkzaftmtmdy.supabase.co",
+          SUPABASE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBmaWZvZnNkamxremFmdG10bWR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0NDcyNzQsImV4cCI6MjA4MTAyMzI3NH0.D-BBk1A4UmJibVQ41jD_yWklmp1zjjP6X7EmBCq-SIw"
+        }
+      };
+    </script>
     <style>
       :root {
         --royal-navy: #0f172a;
@@ -134,7 +147,8 @@
     "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.2",
     "vite": "https://aistudiocdn.com/vite@^7.2.7",
     "path": "https://esm.sh/path@^0.12.7",
-    "url": "https://esm.sh/url@^0.11.4"
+    "url": "https://esm.sh/url@^0.11.4",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.7"
   }
 }
 </script>
@@ -144,3 +158,4 @@
     <script type="module" src="./index.tsx"></script>
   </body>
 </html>
+    
