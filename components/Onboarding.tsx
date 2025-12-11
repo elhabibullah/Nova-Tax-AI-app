@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { UserProfile } from '../types';
 import { MOCK_USER, COUNTRY_TO_LANGUAGES, EXCHANGE_RATES, UI_TRANSLATIONS, STRIPE_KEY, STRIPE_PRICE_ID } from '../constants';
-import { ChevronRight, Loader2, MapPin, Globe, FastForward, Search, Terminal, CreditCard, ShieldCheck, Zap, X, Building2, User, CalendarDays, CheckCircle, Check, Lock } from 'lucide-react';
+import { ChevronRight, Loader2, MapPin, Globe, FastForward, Search, Terminal, CreditCard, ShieldCheck, Zap, X, Building2, User, CalendarDays, CheckCircle, Check, Lock, AlertTriangle } from 'lucide-react';
 import { translateUIDictionary } from '../services/geminiService';
 
 interface OnboardingProps {
@@ -27,6 +27,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, initialView 
   // New: AI Translation state for Onboarding UI
   const [localizedDict, setLocalizedDict] = useState<any>(null);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const [regData, setRegData] = useState({
       companyName: '',
@@ -46,7 +47,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, initialView 
   useEffect(() => {
       if (initialView === 'setup') {
           setRegData({ companyName: '', businessStructure: '', incorporationDate: '', businessAddress: '', privateAddress: '', postalAddress: '', isPrivateSameAsBusiness: false, name: '', position: '' });
-          setSelectedCountry('United States'); 
+          setSelectedCountry('United States'); // Default, user can change
       }
   }, [initialView]);
 
@@ -122,11 +123,11 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, initialView 
   };
 
   const handleSubscribe = async () => {
+    setPaymentError(null);
     // Check if Stripe is loaded
     // @ts-ignore
     if (typeof Stripe === 'undefined') {
-        console.error("Stripe.js not loaded");
-        setViewState('setup');
+        setPaymentError("Payment Gateway Error: Stripe.js not loaded. Check your internet connection.");
         return;
     }
     
@@ -134,28 +135,35 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, initialView 
         // @ts-ignore
         const stripe = Stripe(STRIPE_KEY);
         if (!stripe) {
-             console.error("Stripe failed to initialize with provided key");
-             setViewState('setup');
+             setPaymentError("Payment Gateway Initialization Failed. Invalid Configuration.");
              return;
         }
 
         const { error } = await stripe.redirectToCheckout({
             lineItems: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
             mode: 'subscription',
-            successUrl: window.location.href, // Redirect back to this page on success
+            successUrl: window.location.href + '?session_id={CHECKOUT_SESSION_ID}', // Return to app on success
             cancelUrl: window.location.href,
         });
 
         if (error) {
-            console.warn("Stripe Checkout Warning (likely invalid Price ID):", error);
-            // Fallback to setup view so user isn't stuck
-            setViewState('setup'); 
+            console.error("Stripe Error:", error);
+            setPaymentError(error.message || "Payment Failed. Please try again.");
         }
     } catch (e) {
-        console.error("Stripe Error:", e);
-        setViewState('setup');
+        console.error("Stripe Exception:", e);
+        setPaymentError("An unexpected error occurred connecting to the payment gateway.");
     }
   };
+
+  // Check for successful payment return
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get('session_id')) {
+        // Assume success if we have a session ID
+        setViewState('setup');
+    }
+  }, []);
 
   const handleCompleteRegistration = () => {
       const newUser: UserProfile = {
@@ -199,14 +207,29 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, initialView 
   if (viewState === 'setup') {
       return (
           <div className="fixed inset-0 z-50 bg-[#f8fafc] overflow-y-auto custom-scrollbar text-slate-800" dir={isRTL ? 'rtl' : 'ltr'}>
-              <div className="max-w-3xl mx-auto p-6 animate-fade-in pt-6"> {/* Reduced top padding */}
-                  <div className="text-center mb-8"> {/* Reduced margin */}
+              <div className="max-w-3xl mx-auto p-6 animate-fade-in pt-6"> 
+                  <div className="text-center mb-8"> 
                       <img src="https://fit-4rce-x.s3.eu-north-1.amazonaws.com/NovaTax__logo-invisible-background.png" className="w-48 mx-auto mb-6 opacity-100 logo-glow invert filter brightness-0" />
                       <h2 className="text-3xl font-extrabold text-slate-800 uppercase tracking-widest mb-2">{t.regTitle}</h2>
                       <p className="text-slate-500 text-sm">{t.regDesc}</p>
                   </div>
 
                   <div className="bg-white p-10 rounded-[2rem] relative overflow-hidden shadow-xl border border-slate-100">
+                      <div className="mb-8"><h3 className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-4 flex items-center gap-2"><Globe size={16}/> Jurisdiction</h3>
+                        <div className="w-full relative">
+                            <select 
+                                value={selectedCountry || ''} 
+                                onChange={(e) => setSelectedCountry(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-800 text-sm outline-none focus:border-blue-500 appearance-none font-bold"
+                            >
+                                {Object.keys(COUNTRY_TO_LANGUAGES).filter(k => k !== 'Default').sort().map(c => (
+                                    <option key={c} value={c}>{c}</option>
+                                ))}
+                            </select>
+                            <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none text-slate-500">▼</div>
+                        </div>
+                      </div>
+
                       <div className="mb-8"><h3 className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-4 flex items-center gap-2"><User size={16}/> Identity</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><input type="text" placeholder="Full Name" value={regData.name} onChange={e => setRegData({...regData, name: e.target.value})} className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-800 text-sm outline-none focus:border-blue-500" /><input type="text" placeholder="Position (CEO, Founder)" value={regData.position} onChange={e => setRegData({...regData, position: e.target.value})} className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-800 text-sm outline-none focus:border-blue-500" /></div></div>
                       <div className="mb-8"><h3 className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-4 flex items-center gap-2"><Building2 size={16}/> Entity Details</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4"><input type="text" placeholder="Company Name" value={regData.companyName} onChange={e => setRegData({...regData, companyName: e.target.value})} className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-800 text-sm outline-none focus:border-blue-500" /><input type="text" placeholder="Legal Structure (LLC, etc.)" value={regData.businessStructure} onChange={e => setRegData({...regData, businessStructure: e.target.value})} className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-800 text-sm outline-none focus:border-blue-500" /></div><div className="mb-4"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">{t.incDate}</label><input type="date" value={regData.incorporationDate} onChange={e => setRegData({...regData, incorporationDate: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-800 text-sm outline-none focus:border-blue-500" /></div></div>
                       <div className="mb-8"><h3 className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-4 flex items-center gap-2"><MapPin size={16}/> Addresses</h3><div className="space-y-4"><div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">{t.busAddr}</label><input type="text" value={regData.businessAddress} onChange={e => setRegData({...regData, businessAddress: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-800 text-sm outline-none focus:border-blue-500" placeholder="Street, City, Zip" /></div><div className="flex items-center gap-2"><input type="checkbox" checked={regData.isPrivateSameAsBusiness} onChange={e => setRegData({...regData, isPrivateSameAsBusiness: e.target.checked})} className="accent-blue-500 w-4 h-4 rounded" /><span className="text-xs text-slate-500">{t.sameAddr}</span></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">{t.privAddr}</label><input type="text" disabled={regData.isPrivateSameAsBusiness} value={regData.privateAddress} onChange={e => setRegData({...regData, privateAddress: e.target.value})} className={`w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-800 text-sm outline-none focus:border-blue-500 ${regData.isPrivateSameAsBusiness ? 'opacity-50' : ''}`} /></div><div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">{t.postAddr} (Optional)</label><input type="text" value={regData.postalAddress} onChange={e => setRegData({...regData, postalAddress: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-800 text-sm outline-none focus:border-blue-500" /></div></div></div></div>
@@ -312,6 +335,12 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, initialView 
                                     <div className="flex items-center gap-2 text-slate-500"><Lock size={16} /><span className="text-[10px] uppercase tracking-widest font-bold">Secured by Stripe</span></div>
                                 </div>
                             </div>
+                             {paymentError && (
+                                <div className="bg-rose-500/20 border border-rose-500 text-rose-300 p-4 rounded-xl flex items-center gap-3 animate-fade-in">
+                                    <AlertTriangle size={24} />
+                                    <span className="font-bold">{paymentError}</span>
+                                </div>
+                             )}
                         </div>
                          )}
                     </div>

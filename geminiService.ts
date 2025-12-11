@@ -1,8 +1,8 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { UserProfile, Transaction, CryptoAsset, SalaryRequest, FeasibilityRequest, TranslationDictionary } from "../types";
 
 // Initialize Gemini Client
+// The API key must be obtained exclusively from the environment variable process.env.API_KEY.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // Helper to format currency
@@ -20,7 +20,6 @@ const getLanguageName = (code: string) => {
     }
 };
 
-// ... (Previous parseReceiptImage, runFullAudit, estimateSalary, analyzeCryptoPortfolio, getFeasibilitySuggestion, runFeasibilityStudy, predictTaxRate functions kept exactly as is)
 export const parseReceiptImage = async (base64Image: string, country: string): Promise<any> => {
     const model = "gemini-2.5-flash"; // Supports vision
     const base64Data = base64Image.split(',')[1] || base64Image;
@@ -83,17 +82,17 @@ export const translateUIDictionary = async (baseDict: TranslationDictionary, tar
     const model = "gemini-2.5-flash";
     const langName = getLanguageName(targetLangCode);
     
-    // We send the structure of the English dictionary and ask Gemini to translate the values
-    // To save tokens, we might process sections, but for now we try the whole object as it's efficient text.
+    // Strengthened Prompt to avoid hallucinations (e.g., Spanish when Russian requested)
     const prompt = `
         You are a professional software localization expert.
-        Translate the following JSON UI dictionary from English to ${langName}.
+        Translate the following JSON UI dictionary from English to ${langName} (${targetLangCode}).
         
-        Rules:
+        CRITICAL INSTRUCTIONS:
         1. Keep the exact same JSON structure and keys.
         2. Only translate the values (strings).
         3. Maintain professional financial/accounting terminology.
         4. Return ONLY valid JSON.
+        5. STRICTLY translate to ${langName}. Do NOT use any other language.
         
         Source JSON:
         ${JSON.stringify(baseDict)}
@@ -111,5 +110,34 @@ export const translateUIDictionary = async (baseDict: TranslationDictionary, tar
     } catch (error) {
         console.error("Translation Error:", error);
         return baseDict; // Fallback to English if fails
+    }
+};
+
+// --- NEW: AI Financial Data Translation ---
+export const translateFinancialData = async (data: any, targetLangCode: string): Promise<any> => {
+    const model = "gemini-2.5-flash";
+    const langName = getLanguageName(targetLangCode);
+
+    const prompt = `
+        You are a professional accountant and translator.
+        Translate the values of "name", "description", and "category" fields in the following JSON data from English to ${langName} (${targetLangCode}).
+        Do not change numbers, IDs, or structure.
+        Only translate string values that are user-facing text.
+        
+        Data:
+        ${JSON.stringify(data)}
+    `;
+
+    try {
+         const response = await ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        const text = response.text?.trim() || "{}";
+        return JSON.parse(text);
+    } catch (error) {
+        console.error("Data Translation Error:", error);
+        return data;
     }
 };

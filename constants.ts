@@ -18,7 +18,7 @@ export const COUNTRY_TO_LANGUAGES: Record<string, { code: string; name: string; 
     'Italy': [{ code: 'it', name: 'Italian', nativeName: 'Italiano', flag: '🇮🇹', currency: 'EUR' }],
     'Spain': [{ code: 'es', name: 'Spanish', nativeName: 'Español', flag: '🇪🇸', currency: 'EUR' }],
     'Netherlands': [{ code: 'nl', name: 'Dutch', nativeName: 'Nederlands', flag: '🇳🇱', currency: 'EUR' }, { code: 'en', name: 'English', nativeName: 'English', flag: '🇳🇱', currency: 'EUR' }],
-    'Belgium': [{ code: 'fr', name: 'French', nativeName: 'Français', flag: '🇧🇪', currency: 'EUR' }, { code: 'nl', name: 'Dutch', nativeName: 'Nederlands', flag: '🇧🇪', currency: 'EUR' }, { code: 'en', name: 'English', nativeName: 'English', flag: '🇧🇪', currency: 'EUR' }],
+    'Belgium': [{ code: 'fr', name: 'French', nativeName: 'Français', flag: '🇧🇪', currency: 'EUR' }, { code: 'nl', name: 'Dutch', nativeName: 'Nederlands', flag: '🇧🇪', currency: 'EUR' }, { code: 'de', name: 'German', nativeName: 'Deutsch', flag: '🇧🇪', currency: 'EUR' }, { code: 'en', name: 'English', nativeName: 'English', flag: '🇧🇪', currency: 'EUR' }],
     'Switzerland': [{ code: 'de', name: 'German', nativeName: 'Deutsch', flag: '🇨🇭', currency: 'CHF' }, { code: 'fr', name: 'French', nativeName: 'Français', flag: '🇨🇭', currency: 'CHF' }],
     'Belarus': [{ code: 'be', name: 'Belarusian', nativeName: 'Беларуская', flag: '🇧🇾', currency: 'BYN' }, { code: 'ru', name: 'Russian', nativeName: 'Русский', flag: '🇧🇾', currency: 'BYN' }],
     'Russia': [{ code: 'ru', name: 'Russian', nativeName: 'Русский', flag: '🇷🇺', currency: 'RUB' }],

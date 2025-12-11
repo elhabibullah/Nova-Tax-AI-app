@@ -8,9 +8,9 @@ import { Onboarding } from './components/Onboarding';
 import { AccountsView, ProfitLossView, AddExpenseModal } from './components/AccountingViews';
 import { SettingsView } from './components/SettingsView';
 import { ExchangeRateView } from './components/ExchangeRateView';
-import { MOCK_TRANSACTIONS, MOCK_CRYPTO, APP_SECTIONS, UI_TRANSLATIONS, MOCK_USER } from './constants';
-import { UserProfile, Transaction, TranslationDictionary } from './types';
-import { translateUIDictionary } from './services/geminiService';
+import { MOCK_TRANSACTIONS, MOCK_CRYPTO, APP_SECTIONS, UI_TRANSLATIONS, MOCK_ACCOUNTS, MOCK_PROFIT_LOSS } from './constants';
+import { UserProfile, Transaction, TranslationDictionary, AccountItem, PnLItem } from './types';
+import { translateUIDictionary, translateFinancialData } from './services/geminiService';
 import { loadProfiles, upsertProfile, loadTransactions, saveTransaction, wipeTransactions } from './services/supabaseService';
 import { Menu, Search, Bell, Plus, Loader2 } from 'lucide-react';
 
@@ -31,6 +31,10 @@ const App: React.FC = () => {
   // Localization State
   const [currentTranslations, setCurrentTranslations] = useState<TranslationDictionary | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
+  
+  // Translated Mock Data State
+  const [displayAccounts, setDisplayAccounts] = useState<AccountItem[]>(MOCK_ACCOUNTS);
+  const [displayPnL, setDisplayPnL] = useState<PnLItem>(MOCK_PROFIT_LOSS);
 
   const user = profiles.find(p => p.id === activeUserId) || null;
 
@@ -50,8 +54,6 @@ const App: React.FC = () => {
       if (activeUserId) {
           localStorage.setItem('novatax_active_user_id', activeUserId);
           const fetchTx = async () => {
-              // Special case: Mock User 'u1' always gets mock transactions if DB is empty?
-              // For now, we trust the DB/Service.
               const loadedTx = await loadTransactions(activeUserId);
               if (loadedTx.length === 0 && activeUserId === 'u1') {
                    setTransactions(MOCK_TRANSACTIONS);
@@ -66,21 +68,35 @@ const App: React.FC = () => {
       }
   }, [activeUserId]);
 
-  // 3. Translation Logic
+  // 3. Translation Logic (UI + DATA)
   useEffect(() => {
       const loadTranslations = async () => {
           if (!user) return;
           const lang = user.language;
           
+          // UI Translation
           if (UI_TRANSLATIONS[lang]) {
               setCurrentTranslations(UI_TRANSLATIONS[lang]);
-              return;
+          } else {
+              setIsTranslating(true);
+              const translatedDict = await translateUIDictionary(UI_TRANSLATIONS['en'], lang);
+              setCurrentTranslations(translatedDict);
+              setIsTranslating(false);
           }
 
-          setIsTranslating(true);
-          const translatedDict = await translateUIDictionary(UI_TRANSLATIONS['en'], lang);
-          setCurrentTranslations(translatedDict);
-          setIsTranslating(false);
+          // Data Translation (Always try to translate if not EN)
+          if (lang !== 'en') {
+             // Translate Accounts
+             const translatedAccs = await translateFinancialData(MOCK_ACCOUNTS, lang);
+             setDisplayAccounts(translatedAccs);
+             
+             // Translate PnL
+             const translatedPnL = await translateFinancialData(MOCK_PROFIT_LOSS, lang);
+             setDisplayPnL(translatedPnL);
+          } else {
+             setDisplayAccounts(MOCK_ACCOUNTS);
+             setDisplayPnL(MOCK_PROFIT_LOSS); 
+          }
       };
 
       loadTranslations();
@@ -170,8 +186,8 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case APP_SECTIONS.DASHBOARD: return <Dashboard user={user!} transactions={transactions} translations={t.dashboard} />;
-      case APP_SECTIONS.ACCOUNTS: return <AccountsView user={user!} translations={t.accounting} />;
-      case APP_SECTIONS.REPORTS: return <ProfitLossView user={user!} translations={t.accounting} />;
+      case APP_SECTIONS.ACCOUNTS: return <AccountsView user={user!} translations={t.accounting} accounts={displayAccounts} />;
+      case APP_SECTIONS.REPORTS: return <ProfitLossView user={user!} translations={t.accounting} pnlData={displayPnL} />;
       case APP_SECTIONS.EXCHANGE: return <ExchangeRateView user={user!} />;
       case APP_SECTIONS.HR: return <HRTool user={user!} />;
       case APP_SECTIONS.FEASIBILITY: return <FeasibilityTool user={user!} />;

@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { UserProfile, TranslationDictionary } from '../types';
-import { Save, Building2, CreditCard, Users, MapPin, CheckCircle2, User, CalendarDays, AlertTriangle, Trash2, Plus, LogOut, Briefcase } from 'lucide-react';
+import { Save, Building2, CreditCard, Users, MapPin, CheckCircle2, User, CalendarDays, AlertTriangle, Trash2, Plus, LogOut, Briefcase, Globe } from 'lucide-react';
+import { COUNTRY_TO_LANGUAGES } from '../constants';
 
 interface SettingsViewProps {
     user: UserProfile;
@@ -33,6 +34,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         privateAddress: user.addresses?.private || '',
         postalAddress: user.addresses?.postal || '',
         isPrivateSameAsBusiness: user.addresses?.isPrivateSameAsBusiness || false,
+        country: user.country || 'United States',
         inviteEmail: ''
     });
 
@@ -55,6 +57,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             privateAddress: user.addresses?.private || '',
             postalAddress: user.addresses?.postal || '',
             isPrivateSameAsBusiness: user.addresses?.isPrivateSameAsBusiness || false,
+            country: user.country || 'United States',
             inviteEmail: ''
         });
     }, [user]);
@@ -76,6 +79,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             vatNumber: formData.vatNumber,
             companyNumber: formData.companyNumber,
             position: formData.position,
+            country: formData.country,
             addresses: { business: formData.businessAddress, private: formData.privateAddress, postal: formData.postalAddress, isPrivateSameAsBusiness: formData.isPrivateSameAsBusiness },
             bankDetails: { bankName: formData.bankName, iban: formData.iban, accountHolder: formData.accountHolder }
         };
@@ -118,9 +122,43 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         <div className="space-y-2"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{translations.position}</label><input type="text" value={formData.position} onChange={e => setFormData({...formData, position: e.target.value})} className="w-full bg-slate-800 border border-slate-600 p-3 rounded-xl text-white text-sm outline-none" /></div>
                     </div>
                 </div>
+
                 <div className="w-full h-px bg-white/10"></div>
-                {/* ... (Rest of the fields use similar styling - Navy backgrounds input-liquid style) ... */}
-                {/* For brevity, I'm ensuring the Reset button logic is correct and styles are applied */}
+                
+                 <div>
+                    <h3 className="text-sm font-bold text-blue-300 uppercase tracking-widest mb-6 flex items-center gap-2"><Globe size={16} /> Jurisdiction & Address</h3>
+                    <div className="space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operating Jurisdiction</label>
+                            <div className="relative">
+                                <select 
+                                    value={formData.country} 
+                                    onChange={(e) => setFormData({...formData, country: e.target.value})}
+                                    className="w-full bg-slate-800 border border-slate-600 p-3 rounded-xl text-white text-sm outline-none font-bold appearance-none cursor-pointer"
+                                >
+                                    {Object.keys(COUNTRY_TO_LANGUAGES).filter(k => k !== 'Default').sort().map(c => (
+                                        <option key={c} value={c}>{c}</option>
+                                    ))}
+                                </select>
+                                <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none text-slate-500">▼</div>
+                            </div>
+                        </div>
+                        <div className="space-y-2"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{translations.businessAddr}</label><input type="text" value={formData.businessAddress} onChange={e => setFormData({...formData, businessAddress: e.target.value})} className="w-full bg-slate-800 border border-slate-600 p-3 rounded-xl text-white text-sm outline-none" placeholder="Street, City, Zip" /></div>
+                        
+                         <div className="flex items-center gap-2 py-2">
+                             <input type="checkbox" checked={formData.isPrivateSameAsBusiness} onChange={e => setFormData({...formData, isPrivateSameAsBusiness: e.target.checked})} className="accent-blue-500 w-4 h-4 rounded" />
+                             <span className="text-xs text-slate-500">Private address is same as business</span>
+                         </div>
+                         
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                             <div className="space-y-2"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{translations.privateAddr}</label><input type="text" disabled={formData.isPrivateSameAsBusiness} value={formData.privateAddress} onChange={e => setFormData({...formData, privateAddress: e.target.value})} className={`w-full bg-slate-800 border border-slate-600 p-3 rounded-xl text-white text-sm outline-none ${formData.isPrivateSameAsBusiness ? 'opacity-50' : ''}`} /></div>
+                             <div className="space-y-2"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{translations.postalAddr}</label><input type="text" value={formData.postalAddress} onChange={e => setFormData({...formData, postalAddress: e.target.value})} className="w-full bg-slate-800 border border-slate-600 p-3 rounded-xl text-white text-sm outline-none" /></div>
+                         </div>
+                    </div>
+                </div>
+
+                <div className="w-full h-px bg-white/10"></div>
+
                  <div className="pt-4 flex flex-col-reverse md:flex-row justify-between items-center gap-4">
                      <button onClick={() => setIsResetConfirmOpen(true)} className="w-full md:w-auto px-6 py-3 border border-rose-900/50 bg-rose-900/10 hover:bg-rose-900/30 text-rose-500 text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 rounded-xl"><Trash2 size={14} /> {translations.dangerZone}</button>
                      {saveStatus === 'saved' ? (
@@ -131,7 +169,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                  </div>
             </div>
             
-            {/* Confirmation Modal logic remains same */}
              {isResetConfirmOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-6">
                     <div className="bg-[#0f172a] rounded-3xl w-full max-w-md p-10 shadow-2xl animate-float-up text-center border border-rose-500/30">

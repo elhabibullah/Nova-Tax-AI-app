@@ -6,7 +6,7 @@ import { MOCK_ACCOUNTS, MOCK_PROFIT_LOSS, TAX_RATES } from '../constants';
 import { predictTaxRate, parseReceiptImage } from '../services/geminiService';
 
 // --- Chart of Accounts View ---
-export const AccountsView: React.FC<{ user: UserProfile, translations: TranslationDictionary['accounting'] }> = ({ user, translations }) => {
+export const AccountsView: React.FC<{ user: UserProfile, translations: TranslationDictionary['accounting'], accounts?: AccountItem[] }> = ({ user, translations, accounts = MOCK_ACCOUNTS }) => {
     return (
         <div className="max-w-6xl mx-auto pb-12 animate-fade-in">
             <div className="flex items-center justify-between mb-8">
@@ -24,7 +24,7 @@ export const AccountsView: React.FC<{ user: UserProfile, translations: Translati
                         <div className="col-span-3 text-right">Balance</div>
                     </div>
                     <div className="divide-y divide-white/5 min-w-[600px]">
-                        {MOCK_ACCOUNTS.map((acc) => (
+                        {accounts.map((acc) => (
                             <div key={acc.id} className="grid grid-cols-12 gap-4 p-6 hover:bg-white/5 transition-colors group cursor-pointer items-center">
                                 <div className="col-span-6 flex items-center gap-3">
                                     <div className={`w-2 h-2 rounded-full shadow-[0_0_8px] ${acc.type === 'Cr' ? 'bg-purple-500 shadow-purple-500' : 'bg-emerald-500 shadow-emerald-500'}`}></div>
@@ -69,6 +69,7 @@ const PnLRow: React.FC<PnLRowProps> = ({ item, level, currency, translations }) 
             'Expense': translations.expenses,
             'Profit and Loss': translations.pnlTitle
         };
+        // Use mapped name if available, otherwise use key (which might already be translated dynamically)
         return map[key] || key;
     };
 
@@ -102,9 +103,14 @@ const PnLRow: React.FC<PnLRowProps> = ({ item, level, currency, translations }) 
     );
 };
 
-export const ProfitLossView: React.FC<{ user: UserProfile, translations: TranslationDictionary['accounting'] }> = ({ user, translations }) => {
-    const grossProfit = (MOCK_PROFIT_LOSS.children?.find(c => c.id === 'sales')?.amount || 0) - (MOCK_PROFIT_LOSS.children?.find(c => c.id === 'cogs')?.amount || 0);
-    const totalExpenses = MOCK_PROFIT_LOSS.children?.find(c => c.id === 'exp')?.amount || 0;
+export const ProfitLossView: React.FC<{ user: UserProfile, translations: TranslationDictionary['accounting'], pnlData?: PnLItem }> = ({ user, translations, pnlData = MOCK_PROFIT_LOSS }) => {
+    // Recalculate based on provided data
+    const salesItem = pnlData.children?.find(c => c.id === 'sales');
+    const cogsItem = pnlData.children?.find(c => c.id === 'cogs');
+    const expItem = pnlData.children?.find(c => c.id === 'exp');
+
+    const grossProfit = (salesItem?.amount || 0) - (cogsItem?.amount || 0);
+    const totalExpenses = expItem?.amount || 0;
     const netProfit = grossProfit - totalExpenses;
 
     return (
@@ -117,7 +123,7 @@ export const ProfitLossView: React.FC<{ user: UserProfile, translations: Transla
             </div>
 
             <div className="bg-[#0f172a] rounded-3xl overflow-hidden mb-8 shadow-2xl border border-slate-700">
-                 <PnLRow item={MOCK_PROFIT_LOSS} level={0} currency={user.displayCurrency} translations={translations} />
+                 <PnLRow item={pnlData} level={0} currency={user.displayCurrency} translations={translations} />
                  
                  {/* Summary Footer */}
                  <div className="p-8 bg-white/5 border-t border-white/10 space-y-4">
@@ -142,7 +148,7 @@ export const ProfitLossView: React.FC<{ user: UserProfile, translations: Transla
     );
 };
 
-// --- Advanced Invoice / Transaction Editor ---
+// ... (AddExpenseModal remains the same)
 export const AddExpenseModal: React.FC<{ 
     isOpen: boolean, 
     onClose: () => void, 
