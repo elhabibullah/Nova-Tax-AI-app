@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { UserProfile } from '../types';
 import { MOCK_USER, COUNTRY_TO_LANGUAGES, EXCHANGE_RATES, UI_TRANSLATIONS } from '../constants';
@@ -279,20 +280,21 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, initialView 
                     </div>
                 </div>
             )}
-
-            {isLoginOpen && (
-                <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4 animate-fade-in">
-                    <div className="w-full max-w-md bg-[#0f172a] rounded-[2rem] p-10 shadow-2xl relative animate-float-up border border-blue-500/20">
-                        <button onClick={() => setIsLoginOpen(false)} className="absolute top-6 right-6 text-slate-500 hover:text-white bg-white/5 p-2 rounded-full hover:bg-white/10 transition-all">✕</button>
-                        <div className="text-center mb-10"><h3 className="text-2xl font-bold text-white uppercase tracking-widest">{t.loginTitle}</h3></div>
-                        <div className="space-y-6">
-                            <div><label className="block text-[10px] font-bold text-blue-300 uppercase tracking-widest mb-2">Email</label><input type="email" placeholder="EMAIL" defaultValue="elhabibullah@gmail.com" className="w-full bg-slate-800 border border-slate-600 p-4 rounded-xl text-white text-sm outline-none font-sans" /></div>
-                             <div><label className="block text-[10px] font-bold text-blue-300 uppercase tracking-widest mb-2">Password</label><input type="password" placeholder="••••••••" defaultValue="Fzpzrkfk" className="w-full bg-slate-800 border border-slate-600 p-4 rounded-xl text-white text-sm outline-none font-sans" /></div>
-                            <button onClick={handleLogin} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl uppercase tracking-widest text-xs transition-all shadow-lg mt-6">{t.loginBtn}</button>
-                        </div>
+        </div>
+        
+        {isLoginOpen && (
+            <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4 animate-fade-in">
+                <div className="w-full max-w-md bg-[#0f172a] rounded-[2rem] p-10 shadow-2xl relative animate-float-up border border-blue-500/20">
+                    <button onClick={() => setIsLoginOpen(false)} className="absolute top-6 right-6 text-slate-500 hover:text-white bg-white/5 p-2 rounded-full hover:bg-white/10 transition-all">✕</button>
+                    <div className="text-center mb-10"><h3 className="text-2xl font-bold text-white uppercase tracking-widest">{t.loginTitle}</h3></div>
+                    <div className="space-y-6">
+                        <div><label className="block text-[10px] font-bold text-blue-300 uppercase tracking-widest mb-2">Email</label><input type="email" placeholder="EMAIL" defaultValue="elhabibullah@gmail.com" className="w-full bg-slate-800 border border-slate-600 p-4 rounded-xl text-white text-sm outline-none font-sans" /></div>
+                            <div><label className="block text-[10px] font-bold text-blue-300 uppercase tracking-widest mb-2">Password</label><input type="password" placeholder="••••••••" defaultValue="Fzpzrkfk" className="w-full bg-slate-800 border border-slate-600 p-4 rounded-xl text-white text-sm outline-none font-sans" /></div>
+                        <button onClick={handleLogin} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl uppercase tracking-widest text-xs transition-all shadow-lg mt-6">{t.loginBtn}</button>
                     </div>
                 </div>
-            )}
-        </div>
-    );
+            </div>
+        )}
+    </div>
+  );
 };
