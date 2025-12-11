@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { UserProfile, CryptoAsset, SalaryRequest, TranslationDictionary } from '../types';
 import { estimateSalary, runFeasibilityStudy, analyzeCryptoPortfolio, getFeasibilitySuggestion } from '../services/geminiService';
@@ -146,6 +147,30 @@ export const FeasibilityTool: React.FC<{ user: UserProfile }> = ({ user }) => {
   const sectionData = FEASIBILITY_STRUCTURE[currentSection];
   const sectionTitle = t.sections[`s${currentSection + 1}` as keyof typeof t.sections];
 
+  // Logic extracted to avoid JSX parsing error
+  const renderNavButtons = () => {
+    if (isLastSection) {
+      return (
+        <button 
+          onClick={handleSubmit} 
+          className="px-10 py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center gap-3 shadow-lg hover:bg-blue-500"
+        >
+          {t.generate} 
+          <Send size={18} />
+        </button>
+      );
+    }
+    return (
+      <button 
+        onClick={handleNext} 
+        className="px-10 py-4 bg-white text-blue-900 rounded-2xl font-bold flex items-center gap-3 hover:bg-slate-200"
+      >
+        {t.next} 
+        {isRTL ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+      </button>
+    );
+  };
+
   return (
     <div className="max-w-4xl mx-auto pb-12" dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="flex justify-center mb-16"><img src="https://fit-4rce-x.s3.eu-north-1.amazonaws.com/NovaTax__logo-invisible-background.png" className="w-96 object-contain" /></div>
@@ -187,23 +212,7 @@ export const FeasibilityTool: React.FC<{ user: UserProfile }> = ({ user }) => {
               {t.prev}
             </button>
             
-            {isLastSection ? (
-              <button 
-                onClick={handleSubmit} 
-                className="px-10 py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center gap-3 shadow-lg hover:bg-blue-500"
-              >
-                {t.generate} 
-                <Send size={18} />
-              </button>
-            ) : (
-              <button 
-                onClick={handleNext} 
-                className="px-10 py-4 bg-white text-blue-900 rounded-2xl font-bold flex items-center gap-3 hover:bg-slate-200"
-              >
-                {t.next} 
-                {isRTL ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-              </button>
-            )}
+            {renderNavButtons()}
           </div>
         </div>
       </div>
